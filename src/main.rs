@@ -1,9 +1,8 @@
 use argh::FromArgs;
-use anyhow::{anyhow, Context, Result};
 
 // Modules
-mod parse;
 mod eval;
+mod parse;
 
 #[derive(FromArgs)]
 /// Interpreter for the salt language
@@ -13,21 +12,11 @@ struct Args {
     file: std::path::PathBuf,
 }
 
-fn main() -> Result<()> {
-    // Get arguments from command line
+fn main() {
+    // Get file, then parse input and evaluate it
     let args = argh::from_env::<Args>();
-
-    // Read file
     let input = std::fs::read_to_string(&args.file)
-        .context(format!("Failed to read file `{}`", args.file.display()))?;
-
-    // Parse input
-    let (_, exprs) = parse::parse(&input)
-        .map_err(|error| anyhow!("Failed to parse input because of {error:#?}"))?;
-
-    // Evaluate expressions
+        .expect(&format!("Failed to read file `{}`", args.file.display()));
+    let exprs = dbg!(parse::parse(&input)).unwrap();
     eval::eval(exprs);
-    
-    // Success
-    Ok(())
 }
