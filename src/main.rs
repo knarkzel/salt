@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use argh::FromArgs;
-use ariadne::{Label, Report, ReportKind, Source};
+use ariadne::{Label, Report, ReportKind, Source, ColorGenerator};
 use nom_supreme::{
     error::{GenericErrorTree, StackContext},
     final_parser::{Location, RecreateContext},
@@ -27,15 +27,24 @@ fn main() -> Result<()> {
     match parse::parse(&input) {
         Ok(exprs) => eval::eval(exprs),
         Err(GenericErrorTree::Stack { contexts, .. }) => {
-            // Get offset for line number in <line>:<column>
-            let mut report = Report::build(ReportKind::Error, file.as_str(), 4);
-            for (tail, context) in contexts.iter().take(1) {
+            // Get offset of first error for <line>:<column>
+            let offset = contexts.iter().next().map(|(tail, _)| {
+                let location = Location::recreate_context(input.as_str(), tail);
+                location.column
+            });
+
+            // Build report for printing nice errors
+            let mut colors = ColorGenerator::new();
+            let mut report = Report::build(ReportKind::Error, file.as_str(), offset.unwrap_or(1));
+            for (tail, context) in contexts {
                 if let StackContext::Context(message) = context {
-                    // Get location
+                    // Get range for current line and highlight it with message
                     let Location { column, .. } = Location::recreate_context(input.as_str(), tail);
-                    let until_newline = tail.find("\n").unwrap_or(tail.len());
-                    let range = (column - 1)..until_newline;
-                    let label = Label::new((file.as_str(), range)).with_message(message);
+                    let next_whitespace = tail.find(char::is_whitespace).unwrap_or(column);
+                    let range = (column - 1)..(column - 1) + next_whitespace;
+                    let label = Label::new((file.as_str(), range))
+                        .with_message(message)
+                        .with_color(colors.next());
                     report = report.with_label(label);
                 }
             }
