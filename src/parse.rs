@@ -43,7 +43,7 @@ fn parse_name(input: &str) -> IResult<Atom> {
 }
 
 fn parse_string(input: &str) -> IResult<Atom> {
-    let parser = delimited(tag("\""), take_until("\""), tag("\"")).context("Expected string");
+    let parser = delimited(tag("\""), take_until("\""), tag("\"")).context("String is incomplete");
     map(parser.cut(), |string: &str| {
         Atom::String(string.to_string())
     })(input)

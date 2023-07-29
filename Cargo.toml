@@ -10,4 +10,6 @@ strip = true
 [dependencies]
 nom = "7.1"
 argh = "0.1"
+ariadne = "0.3"
 nom-supreme = "0.8"
+anyhow = "1.0.72"
