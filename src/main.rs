@@ -1,6 +1,6 @@
-use anyhow::{Context, Result};
 use argh::FromArgs;
-use ariadne::{Label, Report, ReportKind, Source, ColorGenerator};
+use ariadne::{ColorGenerator, Label, Report, ReportKind, Source};
+use color_eyre::{eyre::WrapErr, Help, Result};
 use nom_supreme::{
     error::{GenericErrorTree, StackContext},
     final_parser::{Location, RecreateContext},
@@ -19,9 +19,14 @@ struct Args {
 }
 
 fn main() -> Result<()> {
+    // Nicer panics / error messages
+    color_eyre::install()?;
+
     // Get file
     let Args { file } = argh::from_env();
-    let input = std::fs::read_to_string(&file).context(format!("Failed to read file `{file}`"))?;
+    let input = std::fs::read_to_string(&file)
+        .wrap_err(format!("Failed to read file: \"{file}\""))
+        .suggestion("try using a file that exists")?;
 
     // Parse file, print errors if there are any
     match parse::parse(&input) {

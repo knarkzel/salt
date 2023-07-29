@@ -11,5 +11,5 @@ strip = true
 nom = "7.1"
 argh = "0.1"
 ariadne = "0.3"
+color-eyre = "0.6"
 nom-supreme = "0.8"
-anyhow = "1.0.72"
