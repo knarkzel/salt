@@ -39,7 +39,7 @@ fn main() -> Result<()> {
             });
 
             // Build report for printing nice errors
-            let mut colors = ColorGenerator::new();
+            let mut colors = ColorGenerator::from_state([5000, 45000, 0], 0.5);
             let mut report = Report::build(ReportKind::Error, file.as_str(), offset.unwrap_or(1));
             for (tail, context) in contexts {
                 if let StackContext::Context(message) = context {
