@@ -1,6 +1,9 @@
 use argh::FromArgs;
 use ariadne::{ColorGenerator, Label, Report, ReportKind, Source};
-use color_eyre::{eyre::WrapErr, Help, Result};
+use color_eyre::{
+    eyre::{eyre, WrapErr},
+    Help, Result,
+};
 use nom_supreme::{
     error::{GenericErrorTree, StackContext},
     final_parser::{Location, RecreateContext},
@@ -58,10 +61,7 @@ fn main() -> Result<()> {
             let cache = (file.as_str(), Source::from(input.clone()));
             report.finish().print(cache)?;
         }
-        Err(error) => {
-            eprintln!("Error occurred while parsing: {error}");
-            std::process::exit(1);
-        }
+        Err(error) => return Err(eyre!("Error occurred while parsing: {error}")),
     };
 
     // Success!
