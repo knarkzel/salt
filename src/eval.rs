@@ -1,4 +1,4 @@
-use crate::parse::{parse_interpolation, Atom, Expr};
+use crate::parse::{parse_interpolation, Atom, Expr, Operator};
 use std::collections::HashMap;
 
 pub fn eval(exprs: Vec<Expr>) {
@@ -48,6 +48,45 @@ fn eval_expr(expr: Expr, context: &mut HashMap<String, Expr>) -> Expr {
             context.insert(name, *expr);
             Expr::Void
         }
+        Expr::Compare(left, operator, right) => {
+            let left = eval_expr(*left, context);
+            let right = eval_expr(*right, context);
+            match (&left, operator, &right) {
+                (Expr::Constant(Atom::Number(left)), operator, Expr::Constant(Atom::Number(right))) => {
+                    match operator {
+                        Operator::LessThan => Expr::Constant(Atom::Boolean(left < right)),
+                        Operator::LessThanEqual => Expr::Constant(Atom::Boolean(left <= right)),
+                        Operator::GreaterThan => Expr::Constant(Atom::Boolean(left > right)),
+                        Operator::GreaterThanEqual => Expr::Constant(Atom::Boolean(left >= right)),
+                    }
+                }
+                (Expr::Constant(Atom::Float(left)), operator, Expr::Constant(Atom::Float(right))) => {
+                    match operator {
+                        Operator::LessThan => Expr::Constant(Atom::Boolean(left < right)),
+                        Operator::LessThanEqual => Expr::Constant(Atom::Boolean(left <= right)),
+                        Operator::GreaterThan => Expr::Constant(Atom::Boolean(left > right)),
+                        Operator::GreaterThanEqual => Expr::Constant(Atom::Boolean(left >= right)),
+                    }
+                }
+                _ => panic!("Can't compare {left} or {right}"),
+            }
+        }
+        Expr::If(statement, then, otherwise) => {
+            if let Expr::Constant(Atom::Boolean(value)) = eval_expr(*statement, context) {
+                if value {
+                    for expr in then {
+                        eval_expr(expr, context);
+                    }
+                } else {
+                    if let Some(body) = otherwise {
+                        for expr in body {
+                            eval_expr(expr, context);
+                        }
+                    }
+                }
+            }
+            Expr::Void
+        }
         Expr::Call(name, args) => {
             if name == "println" {
                 for arg in args {
@@ -69,7 +108,7 @@ fn eval_expr(expr: Expr, context: &mut HashMap<String, Expr>) -> Expr {
                             eval_expr(expr.clone(), &mut scope);
                         }
                     }
-                    _ => panic!("function `{name}` doesn't exist."),
+                    _ => panic!("Function `{name}` doesn't exist."),
                 }
             }
             Expr::Void
@@ -78,6 +117,6 @@ fn eval_expr(expr: Expr, context: &mut HashMap<String, Expr>) -> Expr {
             context.insert(name, Expr::Closure(args, body));
             Expr::Void
         }
-        _ => panic!("Invalid expression: {expr:?}"),
+        _ => panic!("Invalid expression: {expr:#?}"),
     }
 }

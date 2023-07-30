@@ -28,7 +28,7 @@ fn main() -> Result<()> {
 
     // Parse file and evaluate it
     let exprs =
-        parse::parse(&input).map_err(|error| eyre!("Error occurrude while parsing: {error}"))?;
+        parse::parse(&input).map_err(|error| eyre!("Error occurred while parsing: {error:#?}"))?;
     eval::eval(exprs);
 
     // Success!

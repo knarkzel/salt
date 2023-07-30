@@ -1,9 +1,10 @@
 use nom::{
     branch::alt,
-    bytes::complete::{take_until, is_not},
-    character::complete::{alpha1, multispace0},
-    combinator::map,
+    bytes::complete::{is_not, take_until},
+    character::complete::{alpha1, digit1, multispace0},
+    combinator::{map, opt, recognize},
     multi::{many0, separated_list0},
+    number::complete::double,
     sequence::{delimited, pair, preceded, separated_pair, tuple},
 };
 use nom_supreme::{error::ErrorTree, final_parser::final_parser, tag::complete::tag, ParserExt};
@@ -23,6 +24,9 @@ where
 // Atom parsers
 #[derive(Debug, Clone, PartialEq)]
 pub enum Atom {
+    Number(i64),
+    Float(f64),
+    Boolean(bool),
     Name(String),
     String(String),
 }
@@ -30,6 +34,9 @@ pub enum Atom {
 impl fmt::Display for Atom {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            Atom::Number(number) => write!(f, "{number}"),
+            Atom::Float(float) => write!(f, "{float}"),
+            Atom::Boolean(boolean) => write!(f, "{boolean}"),
             Atom::Name(name) => write!(f, "{name}"),
             Atom::String(string) => write!(f, "{string}"),
         }
@@ -50,8 +57,46 @@ fn parse_string(input: &str) -> IResult<Atom> {
     map(parser, |string: &str| Atom::String(string.to_string()))(input)
 }
 
+fn parse_number(input: &str) -> IResult<Atom> {
+    let parser = recognize(pair(opt(tag("-")), digit1));
+    map(parser, |number: &str| Atom::Number(number.parse().unwrap()))(input)
+}
+
+fn parse_float(input: &str) -> IResult<Atom> {
+    map(double, Atom::Float)(input)
+}
+
+fn parse_boolean(input: &str) -> IResult<Atom> {
+    let parser = alt((map(tag("true"), |_| true), map(tag("false"), |_| false)));
+    map(parser, Atom::Boolean)(input)
+}
+
 fn parse_atom(input: &str) -> IResult<Atom> {
-    alt((parse_string, parse_name))(input)
+    alt((
+        parse_string,
+        parse_float,
+        parse_number,
+        parse_boolean,
+        parse_name,
+    ))(input)
+}
+
+// Operator parsers
+#[derive(Debug, Clone, PartialEq)]
+pub enum Operator {
+    LessThan,
+    LessThanEqual,
+    GreaterThan,
+    GreaterThanEqual,
+}
+
+fn parse_operator(input: &str) -> IResult<Operator> {
+    alt((
+        map(tag("<="), |_| Operator::LessThanEqual),
+        map(tag("<"), |_| Operator::LessThan),
+        map(tag(">="), |_| Operator::GreaterThanEqual),
+        map(tag(">"), |_| Operator::GreaterThan),
+    ))(input)
 }
 
 // Expression parsers
@@ -61,8 +106,10 @@ pub enum Expr {
     Constant(Atom),
     Let(String, Box<Expr>),
     Call(String, Vec<Expr>),
+    Compare(Box<Expr>, Operator, Box<Expr>),
     Closure(Vec<String>, Vec<Expr>),
     Function(String, Vec<String>, Vec<Expr>),
+    If(Box<Expr>, Vec<Expr>, Option<Vec<Expr>>),
 }
 
 impl fmt::Display for Expr {
@@ -76,6 +123,13 @@ impl fmt::Display for Expr {
 
 fn parse_constant(input: &str) -> IResult<Expr> {
     map(parse_atom, Expr::Constant)(input)
+}
+
+fn parse_compare(input: &str) -> IResult<Expr> {
+    let parser = tuple((parse_primitive, ws(parse_operator), parse_primitive));
+    map(parser, |(left, operator, right)| {
+        Expr::Compare(Box::new(left), operator, Box::new(right))
+    })(input)
 }
 
 fn parse_let(input: &str) -> IResult<Expr> {
@@ -112,13 +166,34 @@ fn parse_function(input: &str) -> IResult<Expr> {
     })(input)
 }
 
+fn parse_if(input: &str) -> IResult<Expr> {
+    let parse_statement = preceded(tag("if"), ws(parse_expr));
+    let parse_then = delimited(tag("{"), ws(many0(parse_expr)), tag("}"));
+    let parse_else = preceded(
+        ws(tag("else")),
+        delimited(tag("{"), ws(many0(parse_expr)), tag("}")),
+    );
+    let parser = tuple((parse_statement, parse_then, opt(parse_else)));
+    map(parser, |(statement, then, otherwise)| {
+        Expr::If(Box::new(statement), then, otherwise)
+    })(input)
+}
+
+fn parse_primitive(input: &str) -> IResult<Expr> {
+    alt((parse_call, parse_constant))(input)
+}
+
+fn parse_complex(input: &str) -> IResult<Expr> {
+    alt((parse_function, parse_if, parse_let, parse_compare))(input)
+}
+
 fn parse_expr(input: &str) -> IResult<Expr> {
-    alt((parse_function, parse_let, parse_call, parse_constant))(input)
+    alt((parse_complex, parse_primitive))(input)
 }
 
 // Other parsers to be used in the evaluator, such as interpolation
 pub fn parse_interpolation(input: &str) -> IResult<Vec<Expr>> {
-    let parse_braces = delimited(tag("{"), ws(parse_expr), tag("}"));
+    let parse_braces = delimited(tag("{"), ws(parse_primitive), tag("}"));
     let parse_string = map(is_not("{"), |string: &str| {
         Expr::Constant(Atom::String(string.to_string()))
     });
