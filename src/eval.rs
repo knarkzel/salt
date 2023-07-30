@@ -13,6 +13,7 @@ fn eval_expr(expr: Expr, context: &mut HashMap<String, Expr>) -> Expr {
     // Evaluate expression
     match expr {
         Expr::Void => expr,
+        Expr::Return(expr) => Expr::Return(Box::new(eval_expr(*expr, context))),
         Expr::Constant(Atom::String(ref string)) => match parse_interpolation(string) {
             Ok((_, exprs)) => {
                 match exprs.len() {
@@ -45,29 +46,34 @@ fn eval_expr(expr: Expr, context: &mut HashMap<String, Expr>) -> Expr {
             _ => expr,
         },
         Expr::Let(name, expr) => {
-            context.insert(name, *expr);
+            let expr = eval_expr(*expr, context);
+            context.insert(name, expr);
             Expr::Void
         }
         Expr::Compare(left, operator, right) => {
             let left = eval_expr(*left, context);
             let right = eval_expr(*right, context);
             match (&left, operator, &right) {
-                (Expr::Constant(Atom::Number(left)), operator, Expr::Constant(Atom::Number(right))) => {
-                    match operator {
-                        Operator::LessThan => Expr::Constant(Atom::Boolean(left < right)),
-                        Operator::LessThanEqual => Expr::Constant(Atom::Boolean(left <= right)),
-                        Operator::GreaterThan => Expr::Constant(Atom::Boolean(left > right)),
-                        Operator::GreaterThanEqual => Expr::Constant(Atom::Boolean(left >= right)),
-                    }
-                }
-                (Expr::Constant(Atom::Float(left)), operator, Expr::Constant(Atom::Float(right))) => {
-                    match operator {
-                        Operator::LessThan => Expr::Constant(Atom::Boolean(left < right)),
-                        Operator::LessThanEqual => Expr::Constant(Atom::Boolean(left <= right)),
-                        Operator::GreaterThan => Expr::Constant(Atom::Boolean(left > right)),
-                        Operator::GreaterThanEqual => Expr::Constant(Atom::Boolean(left >= right)),
-                    }
-                }
+                (
+                    Expr::Constant(Atom::Number(left)),
+                    operator,
+                    Expr::Constant(Atom::Number(right)),
+                ) => match operator {
+                    Operator::LessThan => Expr::Constant(Atom::Boolean(left < right)),
+                    Operator::LessThanEqual => Expr::Constant(Atom::Boolean(left <= right)),
+                    Operator::GreaterThan => Expr::Constant(Atom::Boolean(left > right)),
+                    Operator::GreaterThanEqual => Expr::Constant(Atom::Boolean(left >= right)),
+                },
+                (
+                    Expr::Constant(Atom::Float(left)),
+                    operator,
+                    Expr::Constant(Atom::Float(right)),
+                ) => match operator {
+                    Operator::LessThan => Expr::Constant(Atom::Boolean(left < right)),
+                    Operator::LessThanEqual => Expr::Constant(Atom::Boolean(left <= right)),
+                    Operator::GreaterThan => Expr::Constant(Atom::Boolean(left > right)),
+                    Operator::GreaterThanEqual => Expr::Constant(Atom::Boolean(left >= right)),
+                },
                 _ => panic!("Can't compare {left} or {right}"),
             }
         }
@@ -105,7 +111,9 @@ fn eval_expr(expr: Expr, context: &mut HashMap<String, Expr>) -> Expr {
                         }
 
                         for expr in body {
-                            eval_expr(expr.clone(), &mut scope);
+                            if let Expr::Return(expr) = eval_expr(expr.clone(), &mut scope) {
+                                return *expr;
+                            }
                         }
                     }
                     _ => panic!("Function `{name}` doesn't exist."),

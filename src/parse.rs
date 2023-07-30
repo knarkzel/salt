@@ -110,6 +110,7 @@ pub enum Expr {
     Closure(Vec<String>, Vec<Expr>),
     Function(String, Vec<String>, Vec<Expr>),
     If(Box<Expr>, Vec<Expr>, Option<Vec<Expr>>),
+    Return(Box<Expr>),
 }
 
 impl fmt::Display for Expr {
@@ -133,10 +134,10 @@ fn parse_compare(input: &str) -> IResult<Expr> {
 }
 
 fn parse_let(input: &str) -> IResult<Expr> {
-    let parse_statement = separated_pair(parse_variable, ws(tag("=")), parse_atom);
+    let parse_statement = separated_pair(parse_variable, ws(tag("=")), parse_primitive);
     let parser = preceded(ws(tag("let")), parse_statement).context("Invalid let statement");
-    map(parser, |(name, atom)| {
-        Expr::Let(name, Box::new(Expr::Constant(atom)))
+    map(parser, |(name, expr)| {
+        Expr::Let(name, Box::new(expr))
     })(input)
 }
 
@@ -179,12 +180,17 @@ fn parse_if(input: &str) -> IResult<Expr> {
     })(input)
 }
 
+fn parse_return(input: &str) -> IResult<Expr> {
+    let parser = preceded(tag("return"), ws(parse_expr));
+    map(parser, |expr| Expr::Return(Box::new(expr)))(input)
+}
+
 fn parse_primitive(input: &str) -> IResult<Expr> {
     alt((parse_call, parse_constant))(input)
 }
 
 fn parse_complex(input: &str) -> IResult<Expr> {
-    alt((parse_function, parse_if, parse_let, parse_compare))(input)
+    alt((parse_function, parse_if, parse_let, parse_return, parse_compare))(input)
 }
 
 fn parse_expr(input: &str) -> IResult<Expr> {
