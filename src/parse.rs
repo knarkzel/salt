@@ -21,7 +21,7 @@ where
 }
 
 // Atom parsers
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Atom {
     Name(String),
     String(String),
@@ -55,7 +55,7 @@ fn parse_atom(input: &str) -> IResult<Atom> {
 }
 
 // Expression parsers
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Expr {
     Void,
     Constant(Atom),

@@ -15,16 +15,25 @@ fn eval_expr(expr: Expr, context: &mut HashMap<String, Expr>) -> Expr {
         Expr::Void => expr,
         Expr::Constant(Atom::String(ref string)) => match parse_interpolation(string) {
             Ok((_, exprs)) => {
-                let mut output = String::with_capacity(string.len());
-                for expr in exprs {
-                    if let Expr::Constant(Atom::String(string)) = expr {
-                        output.push_str(&string);
-                    } else {
-                        let expr = eval_expr(expr, context);
-                        output.push_str(&expr.to_string());
+                match exprs.len() {
+                    0 | 1 => return expr,
+                    _ => {
+                        let mut output = String::with_capacity(string.len());
+                        for mut expr in exprs {
+                            // Keep evaluating until it's just a string
+                            loop {
+                                let new_expr = eval_expr(expr.clone(), context);
+                                if expr == new_expr {
+                                    break;
+                                } else {
+                                    expr = new_expr;
+                                }
+                            }
+                            output.push_str(&expr.to_string());
+                        }
+                        return Expr::Constant(Atom::String(output));
                     }
                 }
-                return Expr::Constant(Atom::String(output));
             }
             _ => expr,
         },
