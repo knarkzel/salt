@@ -125,5 +125,21 @@ fn eval_expr(expr: Expr, context: &mut HashMap<String, Expr>) -> Expr {
             context.insert(name, Expr::Closure(args, body));
             Expr::Void
         }
+        Expr::For(name, collection, body) => {
+            let array = eval_expr(*collection, context);
+            match array {
+                Expr::Constant(Atom::Array(items)) => {
+                    let mut scope = context.clone();
+                    for item in items {
+                        scope.insert(name.clone(), Expr::Constant(item));
+                        for expr in &body {
+                            eval_expr(expr.clone(), &mut scope);
+                        }
+                    }
+                    Expr::Void
+                }
+                _ => panic!("Can't loop over `{array}`"),
+            }
+        },
     }
 }

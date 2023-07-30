@@ -29,6 +29,7 @@ pub enum Atom {
     Boolean(bool),
     Name(String),
     String(String),
+    Array(Vec<Atom>),
 }
 
 impl fmt::Display for Atom {
@@ -39,6 +40,16 @@ impl fmt::Display for Atom {
             Atom::Boolean(boolean) => write!(f, "{boolean}"),
             Atom::Name(name) => write!(f, "{name}"),
             Atom::String(string) => write!(f, "{string}"),
+            Atom::Array(items) => {
+                write!(f, "[")?;
+                for (i, expr) in items.iter().enumerate() {
+                    write!(f, "{expr}")?;
+                    if i + 1 < items.len() {
+                        write!(f, ", ")?;
+                    }
+                }
+                write!(f, "]")
+            }
         }
     }
 }
@@ -71,8 +82,18 @@ fn parse_boolean(input: &str) -> IResult<Atom> {
     map(parser, Atom::Boolean)(input)
 }
 
+fn parse_array(input: &str) -> IResult<Atom> {
+    let parser = delimited(
+        tag("["),
+        separated_list0(tag(","), ws(parse_atom)),
+        tag("]"),
+    );
+    map(parser, Atom::Array)(input)
+}
+
 fn parse_atom(input: &str) -> IResult<Atom> {
     alt((
+        parse_array,
         parse_string,
         parse_float,
         parse_number,
@@ -111,6 +132,7 @@ pub enum Expr {
     Function(String, Vec<String>, Vec<Expr>),
     If(Box<Expr>, Vec<Expr>, Option<Vec<Expr>>),
     Return(Box<Expr>),
+    For(String, Box<Expr>, Vec<Expr>),
 }
 
 impl fmt::Display for Expr {
@@ -188,6 +210,16 @@ fn parse_if(input: &str) -> IResult<Expr> {
     })(input)
 }
 
+fn parse_for(input: &str) -> IResult<Expr> {
+    let parse_name = preceded(tag("for"), ws(parse_variable));
+    let parse_collection = preceded(tag("in"), ws(parse_expr));
+    let parse_body = delimited(tag("{"), ws(many0(parse_expr)), tag("}"));
+    let parser = tuple((parse_name, parse_collection, parse_body));
+    map(parser, |(name, collection, body)| {
+        Expr::For(name, Box::new(collection), body)
+    })(input)
+}
+
 fn parse_return(input: &str) -> IResult<Expr> {
     let parser = preceded(tag("return"), ws(parse_expr));
     map(parser, |expr| Expr::Return(Box::new(expr)))(input)
@@ -200,6 +232,7 @@ fn parse_primitive(input: &str) -> IResult<Expr> {
 fn parse_complex(input: &str) -> IResult<Expr> {
     alt((
         parse_function,
+        parse_for,
         parse_if,
         parse_let,
         parse_return,
