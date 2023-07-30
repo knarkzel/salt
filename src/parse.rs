@@ -133,6 +133,7 @@ pub enum Expr {
     If(Box<Expr>, Vec<Expr>, Option<Vec<Expr>>),
     Return(Box<Expr>),
     For(String, Box<Expr>, Vec<Expr>),
+    Get(String, usize),
 }
 
 impl fmt::Display for Expr {
@@ -225,8 +226,15 @@ fn parse_return(input: &str) -> IResult<Expr> {
     map(parser, |expr| Expr::Return(Box::new(expr)))(input)
 }
 
+fn parse_get(input: &str) -> IResult<Expr> {
+    let parse_number = map(digit1, |digits: &str| digits.parse::<usize>().unwrap());
+    let parse_index = delimited(tag("["), parse_number, tag("]"));
+    let parser = pair(parse_variable, parse_index);
+    map(parser, |(name, index)| Expr::Get(name, index))(input)
+}
+
 fn parse_primitive(input: &str) -> IResult<Expr> {
-    alt((parse_closure, parse_call, parse_constant))(input)
+    alt((parse_closure, parse_call, parse_get, parse_constant))(input)
 }
 
 fn parse_complex(input: &str) -> IResult<Expr> {

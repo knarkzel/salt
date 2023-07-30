@@ -140,6 +140,14 @@ fn eval_expr(expr: Expr, context: &mut HashMap<String, Expr>) -> Expr {
                 }
                 _ => panic!("Can't loop over `{array}`"),
             }
+        }
+        Expr::Get(name, index) => match context.get(&name) {
+            Some(Expr::Constant(Atom::Array(items))) => {
+                let expr = Expr::Constant(items[index].clone());
+                return eval_expr(expr, context);
+            }
+            Some(invalid) => panic!("Expected array, got {invalid}"),
+            None => panic!("Couldn't find {name}"),
         },
     }
 }
