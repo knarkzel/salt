@@ -12,7 +12,7 @@ pub fn eval(exprs: Vec<Expr>) {
 fn eval_expr(expr: Expr, context: &mut HashMap<String, Expr>) -> Expr {
     // Evaluate expression
     match expr {
-        Expr::Void | Expr::Closure(_, _) => expr,
+        Expr::Void | Expr::Closure(_, _) | Expr::Array(_) => expr,
         Expr::Return(expr) => Expr::Return(Box::new(eval_expr(*expr, context))),
         Expr::Constant(Atom::String(ref string)) => match parse_interpolation(string) {
             Ok((_, exprs)) => {
@@ -128,10 +128,10 @@ fn eval_expr(expr: Expr, context: &mut HashMap<String, Expr>) -> Expr {
         Expr::For(name, collection, body) => {
             let array = eval_expr(*collection, context);
             match array {
-                Expr::Constant(Atom::Array(items)) => {
+                Expr::Array(items) => {
                     let mut scope = context.clone();
                     for item in items {
-                        scope.insert(name.clone(), Expr::Constant(item));
+                        scope.insert(name.clone(), item);
                         for expr in &body {
                             eval_expr(expr.clone(), &mut scope);
                         }
@@ -142,8 +142,8 @@ fn eval_expr(expr: Expr, context: &mut HashMap<String, Expr>) -> Expr {
             }
         }
         Expr::Get(name, index) => match context.get(&name) {
-            Some(Expr::Constant(Atom::Array(items))) => {
-                let expr = Expr::Constant(items[index].clone());
+            Some(Expr::Array(items)) => {
+                let expr = items[index].clone();
                 return eval_expr(expr, context);
             }
             Some(invalid) => panic!("Expected array, got {invalid}"),

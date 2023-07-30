@@ -1,0 +1,15 @@
+let person = {
+    name = "James"
+    age = 25
+    country = {
+        name = "Germany"
+        valid = true        
+    }
+}
+println(person)
+println(person.name)
+println(person.age)
+println(person.country)
+println(person.country.name)
+println(person.country.valid)
+

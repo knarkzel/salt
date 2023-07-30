@@ -8,7 +8,7 @@ use nom::{
     sequence::{delimited, pair, preceded, separated_pair, tuple},
 };
 use nom_supreme::{error::ErrorTree, final_parser::final_parser, tag::complete::tag, ParserExt};
-use std::fmt;
+use std::{collections::HashMap, fmt};
 
 type Span<'a> = &'a str;
 type IResult<'a, O> = nom::IResult<Span<'a>, O, ErrorTree<Span<'a>>>;
@@ -29,7 +29,6 @@ pub enum Atom {
     Boolean(bool),
     Name(String),
     String(String),
-    Array(Vec<Atom>),
 }
 
 impl fmt::Display for Atom {
@@ -40,16 +39,6 @@ impl fmt::Display for Atom {
             Atom::Boolean(boolean) => write!(f, "{boolean}"),
             Atom::Name(name) => write!(f, "{name}"),
             Atom::String(string) => write!(f, "{string}"),
-            Atom::Array(items) => {
-                write!(f, "[")?;
-                for (i, expr) in items.iter().enumerate() {
-                    write!(f, "{expr}")?;
-                    if i + 1 < items.len() {
-                        write!(f, ", ")?;
-                    }
-                }
-                write!(f, "]")
-            }
         }
     }
 }
@@ -82,18 +71,8 @@ fn parse_boolean(input: &str) -> IResult<Atom> {
     map(parser, Atom::Boolean)(input)
 }
 
-fn parse_array(input: &str) -> IResult<Atom> {
-    let parser = delimited(
-        tag("["),
-        separated_list0(tag(","), ws(parse_atom)),
-        tag("]"),
-    );
-    map(parser, Atom::Array)(input)
-}
-
 fn parse_atom(input: &str) -> IResult<Atom> {
     alt((
-        parse_array,
         parse_string,
         parse_float,
         parse_number,
@@ -124,6 +103,7 @@ fn parse_operator(input: &str) -> IResult<Operator> {
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expr {
     Void,
+    Array(Vec<Expr>),
     Constant(Atom),
     Let(String, Box<Expr>),
     Call(String, Vec<Expr>),
@@ -140,6 +120,16 @@ impl fmt::Display for Expr {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Expr::Constant(atom) => write!(f, "{atom}"),
+            Expr::Array(items) => {
+                write!(f, "[")?;
+                for (i, expr) in items.iter().enumerate() {
+                    write!(f, "{expr}")?;
+                    if i + 1 < items.len() {
+                        write!(f, ", ")?;
+                    }
+                }
+                write!(f, "]")
+            }
             _ => Ok(()),
         }
     }
@@ -149,15 +139,19 @@ fn parse_constant(input: &str) -> IResult<Expr> {
     map(parse_atom, Expr::Constant)(input)
 }
 
+fn parse_compare_valid(input: &str) -> IResult<Expr> {
+    alt((parse_call, parse_constant))(input)
+}
+
 fn parse_compare(input: &str) -> IResult<Expr> {
-    let parser = tuple((parse_primitive, ws(parse_operator), parse_primitive));
+    let parser = tuple((parse_compare_valid, ws(parse_operator), parse_compare_valid));
     map(parser, |(left, operator, right)| {
         Expr::Compare(Box::new(left), operator, Box::new(right))
     })(input)
 }
 
 fn parse_let(input: &str) -> IResult<Expr> {
-    let parse_statement = separated_pair(parse_variable, ws(tag("=")), parse_primitive);
+    let parse_statement = separated_pair(parse_variable, ws(tag("=")), parse_expr);
     let parser = preceded(ws(tag("let")), parse_statement).context("Invalid let statement");
     map(parser, |(name, expr)| Expr::Let(name, Box::new(expr)))(input)
 }
@@ -226,6 +220,15 @@ fn parse_return(input: &str) -> IResult<Expr> {
     map(parser, |expr| Expr::Return(Box::new(expr)))(input)
 }
 
+fn parse_array(input: &str) -> IResult<Expr> {
+    let parser = delimited(
+        tag("["),
+        separated_list0(tag(","), ws(parse_expr)),
+        tag("]"),
+    );
+    map(parser, Expr::Array)(input)
+}
+
 fn parse_get(input: &str) -> IResult<Expr> {
     let parse_number = map(digit1, |digits: &str| digits.parse::<usize>().unwrap());
     let parse_index = delimited(tag("["), parse_number, tag("]"));
@@ -233,28 +236,25 @@ fn parse_get(input: &str) -> IResult<Expr> {
     map(parser, |(name, index)| Expr::Get(name, index))(input)
 }
 
-fn parse_primitive(input: &str) -> IResult<Expr> {
-    alt((parse_closure, parse_call, parse_get, parse_constant))(input)
-}
-
-fn parse_complex(input: &str) -> IResult<Expr> {
+fn parse_expr(input: &str) -> IResult<Expr> {
     alt((
+        parse_return,
         parse_function,
         parse_for,
         parse_if,
         parse_let,
-        parse_return,
         parse_compare,
+        parse_array,
+        parse_closure,
+        parse_get,
+        parse_call,
+        parse_constant,
     ))(input)
-}
-
-fn parse_expr(input: &str) -> IResult<Expr> {
-    alt((parse_complex, parse_primitive))(input)
 }
 
 // Other parsers to be used in the evaluator, such as interpolation
 pub fn parse_interpolation(input: &str) -> IResult<Vec<Expr>> {
-    let parse_braces = delimited(tag("{"), ws(parse_primitive), tag("}"));
+    let parse_braces = delimited(tag("{"), ws(parse_expr), tag("}"));
     let parse_string = map(is_not("{"), |string: &str| {
         Expr::Constant(Atom::String(string.to_string()))
     });
