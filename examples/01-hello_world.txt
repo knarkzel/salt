@@ -1,2 +1,2 @@
-let name = "SvelteRust
+let name = "SvelteRust"
 println(name)

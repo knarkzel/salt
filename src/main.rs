@@ -1,12 +1,7 @@
 use argh::FromArgs;
-use ariadne::{ColorGenerator, Label, Report, ReportKind, Source};
 use color_eyre::{
     eyre::{eyre, WrapErr},
     Help, Result,
-};
-use nom_supreme::{
-    error::{GenericErrorTree, StackContext},
-    final_parser::{Location, RecreateContext},
 };
 
 // Modules
@@ -31,38 +26,10 @@ fn main() -> Result<()> {
         .wrap_err(format!("Failed to read file: \"{file}\""))
         .suggestion("try using a file that exists")?;
 
-    // Parse file, print errors if there are any
-    match parse::parse(&input) {
-        Ok(exprs) => eval::eval(exprs),
-        Err(GenericErrorTree::Stack { contexts, .. }) => {
-            // Get offset of first error for <line>:<column>
-            let offset = contexts.iter().next().map(|(tail, _)| {
-                let location = Location::recreate_context(input.as_str(), tail);
-                location.column
-            });
-
-            // Build report for printing nice errors
-            let mut colors = ColorGenerator::from_state([5000, 45000, 0], 0.5);
-            let mut report = Report::build(ReportKind::Error, file.as_str(), offset.unwrap_or(1));
-            for (tail, context) in contexts {
-                if let StackContext::Context(message) = context {
-                    // Get range for current line and highlight it with message
-                    let Location { column, .. } = Location::recreate_context(input.as_str(), tail);
-                    let next_whitespace = tail.find(char::is_whitespace).unwrap_or(column);
-                    let range = (column - 1)..(column - 1) + next_whitespace;
-                    let label = Label::new((file.as_str(), range))
-                        .with_message(message)
-                        .with_color(colors.next());
-                    report = report.with_label(label);
-                }
-            }
-
-            // Print report
-            let cache = (file.as_str(), Source::from(input.clone()));
-            report.finish().print(cache)?;
-        }
-        Err(error) => return Err(eyre!("Error occurred while parsing: {error}")),
-    };
+    // Parse file and evaluate it
+    let exprs =
+        parse::parse(&input).map_err(|error| eyre!("Error occurrude while parsing: {error}"))?;
+    eval::eval(exprs);
 
     // Success!
     Ok(())

@@ -1,0 +1,5 @@
+fn hello(person) {
+    println("Hello {name}")
+}
+let name = "SvelteRust"
+hello(name)

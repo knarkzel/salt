@@ -1,4 +1,4 @@
-use crate::parse::{Atom, Expr};
+use crate::parse::{parse_interpolation, Atom, Expr};
 use std::collections::HashMap;
 
 pub fn eval(exprs: Vec<Expr>) {
@@ -13,6 +13,21 @@ fn eval_expr(expr: Expr, context: &mut HashMap<String, Expr>) -> Expr {
     // Evaluate expression
     match expr {
         Expr::Void => expr,
+        Expr::Constant(Atom::String(ref string)) => match parse_interpolation(string) {
+            Ok((_, exprs)) => {
+                let mut output = String::with_capacity(string.len());
+                for expr in exprs {
+                    if let Expr::Constant(Atom::String(string)) = expr {
+                        output.push_str(&string);
+                    } else {
+                        let expr = eval_expr(expr, context);
+                        output.push_str(&expr.to_string());
+                    }
+                }
+                return Expr::Constant(Atom::String(output));
+            }
+            _ => expr,
+        },
         Expr::Constant(ref atom) => match atom {
             Atom::Name(name) => context
                 .get(name)
@@ -20,15 +35,38 @@ fn eval_expr(expr: Expr, context: &mut HashMap<String, Expr>) -> Expr {
                 .clone(),
             _ => expr,
         },
-        Expr::Let(Atom::Name(name), expr) => {
+        Expr::Let(name, expr) => {
             context.insert(name, *expr);
             Expr::Void
         }
-        Expr::Call(Atom::Name(name), args) if name == "println" => {
-            for arg in args {
-                print!("{}", eval_expr(arg, context));
+        Expr::Call(name, args) => {
+            if name == "println" {
+                for arg in args {
+                    print!("{}", eval_expr(arg, context));
+                }
+                print!("\n");
+            } else {
+                match context.get(&name) {
+                    Some(Expr::Closure(parameters, body)) => {
+                        // Create new scope for context and run each line
+                        let mut scope = context.clone();
+
+                        for (parameter, arg) in parameters.into_iter().zip(args.into_iter()) {
+                            let expr = eval_expr(arg, &mut scope);
+                            scope.insert(parameter.clone(), expr);
+                        }
+
+                        for expr in body {
+                            eval_expr(expr.clone(), &mut scope);
+                        }
+                    }
+                    _ => panic!("function `{name}` doesn't exist."),
+                }
             }
-            print!("\n");
+            Expr::Void
+        }
+        Expr::Function(name, args, body) => {
+            context.insert(name, Expr::Closure(args, body));
             Expr::Void
         }
         _ => panic!("Invalid expression: {expr:?}"),
