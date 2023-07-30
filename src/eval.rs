@@ -12,7 +12,7 @@ pub fn eval(exprs: Vec<Expr>) {
 fn eval_expr(expr: Expr, context: &mut HashMap<String, Expr>) -> Expr {
     // Evaluate expression
     match expr {
-        Expr::Void => expr,
+        Expr::Void | Expr::Closure(_, _) => expr,
         Expr::Return(expr) => Expr::Return(Box::new(eval_expr(*expr, context))),
         Expr::Constant(Atom::String(ref string)) => match parse_interpolation(string) {
             Ok((_, exprs)) => {
@@ -125,6 +125,5 @@ fn eval_expr(expr: Expr, context: &mut HashMap<String, Expr>) -> Expr {
             context.insert(name, Expr::Closure(args, body));
             Expr::Void
         }
-        _ => panic!("Invalid expression: {expr:#?}"),
     }
 }

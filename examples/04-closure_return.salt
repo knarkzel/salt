@@ -9,7 +9,10 @@ fn select(lambda, left, right) {
    return lambda(left, right)
 }
 
-let lefty = select(|left, right| left, "Left", "Right")
-let righty = select(|left, right| right, "Left", "Right")
+let lefty = select(|left, right| return left, "Left", "Right")
+let righty = select(|left, right| return right, "Left", "Right")
 println(lefty)
 println(righty)
+
+let greeter = |name| println("Hello there, {name}")
+greeter("SvelteRust")

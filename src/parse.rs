@@ -136,9 +136,7 @@ fn parse_compare(input: &str) -> IResult<Expr> {
 fn parse_let(input: &str) -> IResult<Expr> {
     let parse_statement = separated_pair(parse_variable, ws(tag("=")), parse_primitive);
     let parser = preceded(ws(tag("let")), parse_statement).context("Invalid let statement");
-    map(parser, |(name, expr)| {
-        Expr::Let(name, Box::new(expr))
-    })(input)
+    map(parser, |(name, expr)| Expr::Let(name, Box::new(expr)))(input)
 }
 
 fn parse_call(input: &str) -> IResult<Expr> {
@@ -167,6 +165,16 @@ fn parse_function(input: &str) -> IResult<Expr> {
     })(input)
 }
 
+fn parse_closure(input: &str) -> IResult<Expr> {
+    let parse_args = delimited(
+        tag("|"),
+        separated_list0(tag(","), ws(parse_variable)),
+        tag("|"),
+    );
+    let parser = pair(parse_args, ws(parse_expr));
+    map(parser, |(args, expr)| Expr::Closure(args, vec![expr]))(input)
+}
+
 fn parse_if(input: &str) -> IResult<Expr> {
     let parse_statement = preceded(tag("if"), ws(parse_expr));
     let parse_then = delimited(tag("{"), ws(many0(parse_expr)), tag("}"));
@@ -186,11 +194,17 @@ fn parse_return(input: &str) -> IResult<Expr> {
 }
 
 fn parse_primitive(input: &str) -> IResult<Expr> {
-    alt((parse_call, parse_constant))(input)
+    alt((parse_closure, parse_call, parse_constant))(input)
 }
 
 fn parse_complex(input: &str) -> IResult<Expr> {
-    alt((parse_function, parse_if, parse_let, parse_return, parse_compare))(input)
+    alt((
+        parse_function,
+        parse_if,
+        parse_let,
+        parse_return,
+        parse_compare,
+    ))(input)
 }
 
 fn parse_expr(input: &str) -> IResult<Expr> {
